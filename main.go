@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	fixer "github.com/chronologos/historyfixer/fixer"
 )
 
 // Reading files requires checking most calls for errors.
@@ -20,12 +22,14 @@ func check(e error) {
 
 var onlyOnce = []string{}
 
-func main() {
+const (
+	PATH_TO_HISTORY = "/usr/local/google/home/iantay/.bash_history"
+)
 
+func main() {
 	// Perhaps the most basic file reading task is
 	// slurping a file's entire contents into memory.
-	path := "/usr/local/google/home/iantay/.bash_history"
-	inFile, _ := os.Open(path)
+	inFile, _ := os.Open(PATH_TO_HISTORY)
 	defer inFile.Close()
 
 	logFile, err := os.OpenFile("/usr/local/google/home/iantay/usage.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -56,7 +60,7 @@ OUTER:
 	for i, l := range res {
 		if shouldBeTimestamp {
 			shouldBeTimestamp = false
-			if err := isValidTimestamp(l); err == nil {
+			if err := fixer.IsValidTimestamp(l); err == nil {
 				curTimestamp = l
 				continue
 			} else {
@@ -66,7 +70,7 @@ OUTER:
 		}
 		if !shouldBeTimestamp {
 			shouldBeTimestamp = true
-			if err := isValidCommand(l); err != nil {
+			if err := fixer.IsValidCommand(l); err != nil {
 				logwriter.WriteString(fmt.Sprintf("on date: %v: failed to parse history file at line %d. got timestamp %s, expected command\n", time.Now(), i, l))
 				continue OUTER
 			}
@@ -88,11 +92,10 @@ OUTER:
 	fmt.Printf("on date: %v: saw %d commands, %d unique, %d removed\n", time.Now(), allCommands, len(seen), allCommands-len(seen))
 	logwriter.WriteString(fmt.Sprintf("on date: %v: saw %d commands, %d unique, %d removed\n", time.Now(), allCommands, len(seen), allCommands-len(seen)))
 
-	bashHistory := "/usr/local/google/home/iantay/.bash_history"
-	if err := os.Remove(bashHistory); err != nil {
+	if err := os.Remove(PATH_TO_HISTORY); err != nil {
 		log.Fatal(err)
 	}
-	outFile, err := os.OpenFile(bashHistory, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	outFile, err := os.OpenFile(PATH_TO_HISTORY, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -101,7 +104,6 @@ OUTER:
 	for _, l := range out {
 		w.WriteString(l)
 		w.WriteString("\n")
-		//fmt.Println(l)
 	}
 	w.Flush()
 	fmt.Println("done!")
