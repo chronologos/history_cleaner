@@ -4,12 +4,9 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/chronologos/history_cleaner/fixer"
 	"log"
 	"os"
-	"strings"
-	"time"
-
-	fixer "github.com/chronologos/historyfixer/fixer"
 )
 
 // Reading files requires checking most calls for errors.
@@ -23,74 +20,36 @@ func check(e error) {
 var onlyOnce = []string{}
 
 const (
-	PATH_TO_HISTORY = "/usr/local/google/home/iantay/.bash_history"
+	//PATH_TO_HISTORY = "/usr/local/google/home/iantay/.bash_history"
+	PATH_TO_HISTORY = "/Users/iantay/.bash_history"
+	//PATH_TO_LOGS = "/usr/local/google/home/iantay/usage.log"
+	PATH_TO_LOGS = "/Users/iantay/usage.log"
 )
 
 func main() {
-	// Perhaps the most basic file reading task is
-	// slurping a file's entire contents into memory.
-	inFile, _ := os.Open(PATH_TO_HISTORY)
+	inFile, err := os.Open(PATH_TO_HISTORY)
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer inFile.Close()
 
-	logFile, err := os.OpenFile("/usr/local/google/home/iantay/usage.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	logFile, err := os.OpenFile(PATH_TO_LOGS, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer logFile.Close()
-	logwriter := bufio.NewWriter(logFile)
-	defer logwriter.Flush()
+	logWriter := bufio.NewWriter(logFile)
+	defer logWriter.Flush()
 
 	scanner := bufio.NewScanner(inFile)
 	scanner.Split(bufio.ScanLines)
-	res := []string{}
+	var res []string
 	for scanner.Scan() {
 		res = append(res, scanner.Text())
-
 	}
-	// map of command to timestamp
-	seen := make(map[string]string)
-	var out []string
-	shouldBeTimestamp := true
-	var curTimestamp string
-	var allCommands int
-	onlyOnceCounter := make([]int, len(onlyOnce))
-	now := time.Now()
-	secs := fmt.Sprintf("#%v", now.Unix())
-OUTER:
-	for i, l := range res {
-		if shouldBeTimestamp {
-			shouldBeTimestamp = false
-			if err := fixer.IsValidTimestamp(l); err == nil {
-				curTimestamp = l
-				continue
-			} else {
-				logwriter.WriteString(fmt.Sprintf("on date: %v: failed to parse history file at line %d. got err=%v\n", time.Now(), i, err))
-				curTimestamp = secs
-			}
-		}
-		if !shouldBeTimestamp {
-			shouldBeTimestamp = true
-			if err := fixer.IsValidCommand(l); err != nil {
-				logwriter.WriteString(fmt.Sprintf("on date: %v: failed to parse history file at line %d. got timestamp %s, expected command\n", time.Now(), i, l))
-				continue OUTER
-			}
-			allCommands++
-			strippedLine := strings.TrimSpace(l)
-			if _, ok := seen[strippedLine]; !ok {
-				seen[strippedLine] = curTimestamp
-				for i, substr := range onlyOnce {
-					if strings.Contains(strippedLine, substr) && onlyOnceCounter[i] != 0 {
-						continue OUTER
-					}
-					onlyOnceCounter[i] += 1
-				}
-				out = append(out, curTimestamp, strippedLine)
-			}
-		}
 
-	}
-	fmt.Printf("on date: %v: saw %d commands, %d unique, %d removed\n", time.Now(), allCommands, len(seen), allCommands-len(seen))
-	logwriter.WriteString(fmt.Sprintf("on date: %v: saw %d commands, %d unique, %d removed\n", time.Now(), allCommands, len(seen), allCommands-len(seen)))
+	bob := fixer.New(res, logWriter)
+	cleanedHistory := bob.Fix()
 
 	if err := os.Remove(PATH_TO_HISTORY); err != nil {
 		log.Fatal(err)
@@ -101,7 +60,7 @@ OUTER:
 	}
 	defer outFile.Close()
 	w := bufio.NewWriter(outFile)
-	for _, l := range out {
+	for _, l := range cleanedHistory {
 		w.WriteString(l)
 		w.WriteString("\n")
 	}
