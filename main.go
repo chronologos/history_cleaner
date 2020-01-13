@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"github.com/chronologos/history_cleaner/fixer"
 	"log"
@@ -48,8 +47,8 @@ func main() {
 		res = append(res, scanner.Text())
 	}
 
-	bob := fixer.New(res, logWriter)
-	cleanedHistory := bob.Fix()
+	histFixer := fixer.New(res, logWriter)
+	cleanedHistory := histFixer.Fix()
 
 	if err := os.Remove(PATH_TO_HISTORY); err != nil {
 		log.Fatal(err)
@@ -66,24 +65,4 @@ func main() {
 	}
 	w.Flush()
 	fmt.Println("done!")
-}
-
-func isValidTimestamp(t string) error {
-	if len(t) == 0 {
-		return errors.New("invalid timestamp: no data")
-	}
-	if t[0] != '#' {
-		return errors.New("invalid timestamp: does not start with #")
-	}
-	return nil
-}
-
-func isValidCommand(c string) error {
-	if len(c) == 0 {
-		return errors.New("invalid command: no data")
-	}
-	if c[0] == '#' {
-		return errors.New("invalid command: starts with #")
-	}
-	return nil
 }
