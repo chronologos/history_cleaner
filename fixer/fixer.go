@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+const (
+	tempTag = "#TEMP"
+)
 type Config struct {
 	OnlyOnce []string
 }
@@ -17,12 +20,15 @@ type Fixer struct {
 	logger  io.StringWriter
 	config  Config
 
+	// Needed to enable main functionality.
 	commandTime *timestamp
 	currentTime *timestamp
 	expectingTimestamp bool
 	seen map[string]*timestamp
 	onlyOnceCount []int
 	commandCount int
+
+	stringsToRemove []string
 }
 
 func New(history []string, logger io.StringWriter) *Fixer {
@@ -32,7 +38,7 @@ func New(history []string, logger io.StringWriter) *Fixer {
 		currentTime: asTimestamp(fmt.Sprintf("#%v", time.Now().Unix())),
 		seen: make(map[string]*timestamp),
 		expectingTimestamp: true,
-		onlyOnceCount: make([]int, len(fixer.config.OnlyOnce)),
+		stringsToRemove: []string{tempTag},
 	}
 }
 
@@ -79,6 +85,11 @@ func (fixer *Fixer) processOneLine(i int, l string) []string {
 		}
 		fixer.commandCount++
 		strippedLine := strings.TrimSpace(l)
+		for _, dontWant := range fixer.stringsToRemove {
+			if strings.Contains(strippedLine, dontWant){
+				return []string{}
+			}
+		}
 		if _, ok := fixer.seen[strippedLine]; !ok {
 			fixer.seen[strippedLine] = fixer.commandTime
 			for i, substr := range fixer.config.OnlyOnce {
